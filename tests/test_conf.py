@@ -1,5 +1,7 @@
 from textwrap import dedent
 
+import pytest
+
 
 def test_parse_value():
     from pgtoolkit.conf import parse_value
@@ -19,22 +21,38 @@ def test_parse_value():
     assert 1.4 == parse_value('1.4')
 
     # Strings
+    assert '/a/path/to/file.conf' == parse_value(r"/a/path/to/file.conf")
+    assert '0755.log' == parse_value(r"0755.log")
+    assert 'file_ending_with_B' == parse_value(r"file_ending_with_B")
     assert 'esc\'aped string' == parse_value(r"'esc\'aped string'")
+    assert '%m [%p] %q%u@%d ' == parse_value(r"'%m [%p] %q%u@%d '")
+    assert '124.7MB' == parse_value("124.7MB")
+    assert '124.7ms' == parse_value("124.7ms")
 
     # Memory
     assert 1024 == parse_value('1kB')
     assert 1024 * 1024 * 512 == parse_value('512MB')
-    assert 1024 * 1024 * 1024 * 64 == parse_value('64GB')
+    assert 1024 * 1024 * 1024 * 64 == parse_value(' 64 GB ')
     assert 1024 * 1024 * 1024 * 1024 * 5 == parse_value('5TB')
 
     # Time
-    delta = parse_value('24s')
+    delta = parse_value('150 ms')
+    assert 150000 == delta.microseconds
+    delta = parse_value('24s ')
     assert 24 == delta.seconds
+    delta = parse_value("' 5 min'")
+    assert 300 == delta.seconds
     delta = parse_value('2 h')
-    assert 120 == delta.seconds
+    assert 7200 == delta.seconds
+    delta = parse_value('5d')
+    assert 5 == delta.days
 
     # Enums
     assert 'md5' == parse_value('md5')
+
+    # Errors
+    with pytest.raises(ValueError):
+        parse_value("'missing last quote")
 
 
 def test_parser():

@@ -3,6 +3,7 @@
 from ast import literal_eval
 from collections import OrderedDict
 import re
+from datetime import timedelta
 
 
 def parse(fo):
@@ -17,19 +18,46 @@ MEMORY_MULTIPLIERS = {
     'GB': 1024 * 1024 * 1024,
     'TB': 1024 * 1024 * 1024 * 1024,
 }
+_memory_re = re.compile(r'^\s*(?P<number>\d+)\s*(?P<unit>[kMGT]B)\s*$')
+TIMEDELTA_ARGNAME = {
+    'ms': 'milliseconds',
+    's': 'seconds',
+    'min': 'minutes',
+    'h': 'hours',
+    'd': 'days',
+}
+_timedelta_re = re.compile(r'^\s*(?P<number>\d+)\s*(?P<unit>ms|s|min|h|d)\s*$')
 
 
 def parse_value(raw):
     # Ref.
     # https://www.postgresql.org/docs/current/static/config-setting.html#CONFIG-SETTING-NAMES-VALUES
+
     if raw.startswith("'"):
-        raw = literal_eval(raw)
+        try:
+            raw = literal_eval(raw)
+        except SyntaxError as e:
+            raise ValueError(str(e))
 
     if raw.startswith('0'):
-        return int(raw, base=8)
-    elif raw.endswith('B'):
-        mul = MEMORY_MULTIPLIERS[raw[-2:]]
-        return int(raw[:-2]) * mul
+        try:
+            return int(raw, base=8)
+        except ValueError:
+            pass
+
+    m = _memory_re.match(raw)
+    if m:
+        unit = m.group('unit')
+        mul = MEMORY_MULTIPLIERS[unit]
+        return int(m.group('number')) * mul
+
+    m = _timedelta_re.match(raw)
+    if m:
+        unit = m.group('unit')
+        arg = TIMEDELTA_ARGNAME[unit]
+        kwargs = {arg: int(m.group('number'))}
+        return timedelta(**kwargs)
+
     elif raw in ('true', 'yes', 'on'):
         return True
     elif raw in ('false', 'no', 'off'):
